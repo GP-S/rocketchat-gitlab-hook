@@ -49,6 +49,9 @@ class Script { // eslint-disable-line
 				case 'Wiki Page Hook':
 					result = this.wikiEvent(request.content);
 					break;
+				case 'System Hook':
+					result = this.systemEvent(request.content);
+					break;
 				default:
 					result = this.unknownEvent(request, event);
 					break;
@@ -359,6 +362,51 @@ See: ${data.object_attributes.url}`
 				username: project_path,
 				icon_url: project.avatar_url || data.user.avatar_url || '',
 				text: `The wiki page ${wiki_page_title} was ${user_action} by ${user_name}`
+			}
+		};
+	}
+  	systemEvent(data) {
+		const project = data.project || data.repository;
+		const web_url = project.web_url || project.homepage;
+		const user = {
+			name: data.user_name,
+			avatar_url: data.user_avatar
+		};
+		// branch removal
+		if (data.checkout_sha === null && !data.commits.length) {
+			return {
+				content: {
+					username: `gitlab/${project.name}`,
+					icon_url: project.avatar_url || data.user_avatar || '',
+					attachments: [
+						makeAttachment(user, `removed branch ${refParser(data.ref)} from [${project.name}](${web_url})`)
+					]
+				}
+			};
+		}
+		// new branch
+		if (data.before == 0) { // eslint-disable-line
+			return {
+				content: {
+					username: `gitlab/${project.name}`,
+					icon_url: project.avatar_url || data.user_avatar || '',
+					attachments: [
+						makeAttachment(user, `pushed new branch [${refParser(data.ref)}](${web_url}/commits/${refParser(data.ref)}) to [${project.name}](${web_url}), which is ${data.total_commits_count} commits ahead of master`)
+					]
+				}
+			};
+		}
+		return {
+			content: {
+				username: `gitlab/${project.name}`,
+				icon_url: project.avatar_url || data.user_avatar || '',
+				attachments: [
+					makeAttachment(user, `pushed ${data.total_commits_count} commits to branch [${refParser(data.ref)}](${web_url}/commits/${refParser(data.ref)}) in [${project.name}](${web_url})`),
+					{
+						text: data.commits.map((commit) => `  - ${new Date(commit.timestamp).toUTCString()} [${commit.id.slice(0, 8)}](${commit.url}) by ${commit.author.name}: ${commit.message.replace(/\s*$/, '')}`).join('\n'),
+						color: NOTIF_COLOR
+					}
+				]
 			}
 		};
 	}
